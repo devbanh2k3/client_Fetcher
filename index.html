@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facebook Data Fetcher</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            width: 100%;
+        }
+
+        h1,
+        h2 {
+            text-align: center;
+            color: #333;
+        }
+
+        .container {
+            width: 90%;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+
+        form {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        textarea {
+            height: 200px;
+        }
+
+        input[type="text"],
+        textarea {
+
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            background-color: #007BFF;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .error {
+            color: red;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f2f2f2;
+            cursor: pointer;
+        }
+
+        th:hover {
+            background-color: #ddd;
+        }
+
+        td img {
+            width: 60px;
+            height: 60px;
+        }
+
+        /* Thêm hover cho các hàng */
+        tr:hover {
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+
+<body>
+
+
+    <div class="container">
+
+        <h1>Facebook Data Fetcher</h1>
+
+        <!-- Form nhập token, cookie và list link -->
+        <form id="data-form">
+            <label for="accessToken">Access Token:</label>
+            <input type="text" id="accessToken" name="accessToken" required>
+
+            <label for="cookie">Cookie:</label>
+            <input type="text" id="cookie" name="cookie" required>
+
+            <label for="links">Links (each on a new line):</label>
+            <textarea id="links" name="links" required></textarea>
+
+            <button type="submit" id="fetch-button">Fetch Data</button>
+            <button style="background-color: rgb(40, 167, 69);" type="button" id="export-button">Export to
+                Excel</button>
+
+
+        </form>
+        <div class="note"></div>
+        <h2>Results</h2>
+
+        <!-- Container để hiển thị bảng -->
+        <table id="results-table">
+            <thead>
+                <tr>
+                    <th>Index</th>
+                    <th>Post ID</th>
+                    <th>Picture</th>
+                    <th>Likes</th>
+                    <th>Shares</th>
+                    <th>Comments</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Dữ liệu sẽ được chèn vào đây -->
+            </tbody>
+        </table>
+
+        <div class="error" id="error-message"></div>
+    </div>
+
+    <script>
+
+
+
+        // Hàm sắp xếp bảng
+
+        document.getElementById('data-form').addEventListener('submit', async function (event) {
+            event.preventDefault();
+
+            // Vô hiệu hóa nút khi bắt đầu quá trình
+            const fetchButton = document.getElementById('fetch-button');
+            fetchButton.disabled = true;
+            fetchButton.textContent = 'Fetching...'; // Thay đổi nội dung của nút để hiển thị trạng thái
+
+            // Xóa lỗi cũ nếu có
+            document.getElementById('error-message').textContent = '';
+
+            // Lấy các giá trị từ form
+            const accessToken = document.getElementById('accessToken').value;
+            const cookie = document.getElementById('cookie').value;
+            const links = document.getElementById('links').value.split('\n'); // Phân tách các liên kết bằng ký tự xuống dòng
+
+            // Xóa nội dung bảng trước khi hiển thị kết quả mới
+            const tableBody = document.querySelector('#results-table tbody');
+            tableBody.innerHTML = '';
+
+            // Xóa thông báo hoàn thành nếu có
+            const completionMessage = document.getElementById('completion-message');
+            if (completionMessage) {
+                completionMessage.remove();
+            }
+
+            // Biến đếm số thứ tự
+            let index = 1;
+
+            // Thực hiện yêu cầu tuần tự
+            for (let link of links) {
+                link = link.trim(); // Loại bỏ khoảng trắng thừa ở đầu và cuối chuỗi
+
+                // Kiểm tra xem liên kết có rỗng không
+                if (link === '') continue;
+
+                try {
+                    // Gọi API /get-redirect-id-from-url để lấy id_story_fbid
+                    const response = await axios.post('https://fetcherdata.onrender.com/get-redirect-id-from-url', {
+                        url: link,
+                        cookie: cookie 
+                    });
+
+                    const { id_story_fbid } = response.data;
+
+                    if (id_story_fbid) {
+                        // Gọi API /get-facebook-data để lấy dữ liệu từ Facebook
+                        const facebookResponse = await axios.post('https://fetcherdata.onrender.com/get-facebook-data', {
+                            accessToken,
+                            cookie,
+                            idPost: id_story_fbid
+                        });
+
+                        const { reactions_count, shares_count, comments_count, picture, id } = facebookResponse.data;
+                        const formattedDate = new Date().toLocaleString();
+                        // Tạo một hàng cho mỗi dữ liệu
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                    <td>${index++}</td> <!-- Hiển thị số thứ tự -->
+                    <td>${link}</td>
+                    <td><img src="${picture || 'https://via.placeholder.com/100'}" alt="Post picture"></td>
+                    <td>${reactions_count}</td>
+                    <td>${shares_count}</td>
+                    <td>${comments_count}</td>
+                     <td>${formattedDate}</td>
+                `;
+
+                        // Thêm hàng vào bảng
+                        tableBody.appendChild(row);
+                    }
+                } catch (error) {
+                    console.error('Error:', error.message);
+                    document.getElementById('error-message').textContent = 'Error fetching data for one or more links.';
+                }
+
+                // Thêm thời gian chờ giữa các yêu cầu (1 giây, bạn có thể điều chỉnh)
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+
+            // Thêm thông báo khi hoàn thành
+            const successMessage = document.createElement('p');
+            successMessage.id = 'completion-message';
+            successMessage.style.textAlign = 'center';
+            successMessage.style.fontSize = '18px';
+            successMessage.style.color = '#28a745';
+            successMessage.textContent = 'All data has been successfully fetched!';
+            document.querySelector('.note').appendChild(successMessage);
+
+            // Bật lại nút sau khi hoàn thành
+            fetchButton.disabled = false;
+            fetchButton.textContent = 'Fetch Data'; // Khôi phục lại nội dung của nút
+
+
+            const table = document.getElementById('results-table');
+
+            // Lấy ngày tháng hiện tại
+            const now = new Date();
+            const formattedDate = now.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+
+            // Tạo tên file với ngày tháng
+            const fileName = `Facebook_Data_${formattedDate}.xlsx`;
+
+            // Tạo file Excel
+            const workbook = XLSX.utils.book_new();
+            const worksheet = XLSX.utils.table_to_sheet(table);
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Results');
+
+            // Xuất file Excel với tên file
+            XLSX.writeFile(workbook, fileName);
+
+        });
+        document.getElementById('export-button').addEventListener('click', function () {
+            const table = document.getElementById('results-table');
+
+            // Lấy ngày tháng hiện tại
+            const now = new Date();
+            const formattedDate = now.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+
+            // Tạo tên file với ngày tháng
+            const fileName = `Facebook_Data_${formattedDate}.xlsx`;
+
+            // Tạo file Excel
+            const workbook = XLSX.utils.book_new();
+            const worksheet = XLSX.utils.table_to_sheet(table);
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Results');
+
+            // Xuất file Excel với tên file
+            XLSX.writeFile(workbook, fileName);
+        });
+
+
+    </script>
+
+</body>
+
+</html>
